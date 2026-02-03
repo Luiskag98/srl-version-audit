@@ -1,0 +1,30 @@
+---
+- name: Nokia SR Linux - Software Version Audit
+  hosts: all
+  gather_facts: false
+  vars:
+    ansible_connection: ssh
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+  tasks:
+    - name: Check if sr_cli is available (SR Linux indicator)
+      ansible.builtin.raw: "command -v sr_cli >/dev/null 2>&1 || exit 3"
+      register: srl_check
+      changed_when: false
+      failed_when: srl_check.rc not in [0, 3]
+
+    - name: Get software version (only on SR Linux)
+      ansible.builtin.raw: "sr_cli 'show version | grep Software'"
+      register: version_out
+      changed_when: false
+      when: srl_check.rc == 0
+      failed_when: false
+
+    - name: Emit version line for SR Linux devices
+      ansible.builtin.debug:
+        msg: "SRL_VERSION: {{ inventory_hostname }}: {{ version_out.stdout | default('') | trim }}"
+      when: srl_check.rc == 0
+
+    - name: Emit skip line for non-SR Linux devices
+      ansible.builtin.debug:
+        msg: "SRL_VERSION_SKIP: {{ inventory_hostname }}: not SR Linux (sr_cli not found)"
+      when: srl_check.rc == 3
